@@ -1,0 +1,33 @@
+                 GOOGLE LOGIN
+                      │
+                      ▼
+             OAuth2SuccessHandler
+                      │
+              ┌───────┴────────┐
+              │                │
+         create/find       generate code
+           user                │
+              │                ▼
+              │          Temporary Store
+              │                │
+              └───────┬────────┘
+                      │
+                      ▼
+            redirect_uri?code=XYZ
+                      │
+                      ▼
+                   Angular
+                      │
+                      │ POST /auth/exchange
+                      ▼
+               consume(code)
+                      │
+              ┌───────┴───────┐
+              │               │
+           valid           invalid
+              │               │
+              ▼               ▼
+        generate JWT         401
+              │
+              ▼
+            Angular

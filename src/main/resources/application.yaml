@@ -1,0 +1,76 @@
+server:
+  port: 8443
+  http:
+    port: 8080
+  ssl:
+    enabled: true
+    certificate: classpath:localhost+1.pem
+    certificate-private-key: classpath:localhost+1-key.pem
+  servlet:
+    session:
+      timeout: 20m
+spring:
+  application:
+    name: springsecsection1
+#  security:
+#    user:
+#      name: user
+#      password: password
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: password
+    generate-unique-name: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: {GOOGLE_CLIENT_ID}
+            client-secret: {GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+logging:
+  level:
+    org.springframework.security: TRACE
+    org.springframework.security.web.FilterChainProxy: DEBUG
+  pattern:
+    console: "[%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+security:
+  authorization:
+    events:
+      publish-granted: false
+      publish-denied: true
+app:
+  oauth2:
+    authorized-redirect-uris:
+      - http://localhost:4200/oauth/callback
+      - https://app.example.com/oauth/callback
+      - https://admin.example.com/oauth/callback
+  security:
+    login:
+      max-failed-attempts: 5
+      lock-duration: 5m
+      failed-attempt-window: 24h
+  jwt:
+    secret: sz3nRvK9YCtAzl8+be4cgYde13DcaMJmG157SxeCza0=
+    access-token-expiration-ms: 900000
+    refresh-token-expiration-ms: 2592000000
+  cors:
+    allowed-origin-patterns:
+      - http://localhost:*
+      - https://localhost:*
+      - http://*.localhost:*
+      - https://*.localhost:*

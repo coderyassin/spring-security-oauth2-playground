@@ -2,6 +2,7 @@ package org.yascode.springsecsection1;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.context.annotation.Bean;
 import org.yascode.springsecsection1.model.Authority;
 import org.yascode.springsecsection1.model.Role;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class Springsecsection1Application {
 
 	static void main(String[] args) {

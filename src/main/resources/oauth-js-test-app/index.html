@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OAuth2 / Code Exchange — Test</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, sans-serif; color: #182230; background: #f4f6fa; }
+    body { margin: 0; padding: 32px 16px; }
+    main { max-width: 780px; margin: 0 auto; }
+    h1 { margin-bottom: 8px; }
+    .muted { color: #5c6677; }
+    .card { background: white; border: 1px solid #dfe4ec; border-radius: 14px; padding: 20px; margin: 18px 0; box-shadow: 0 3px 14px #1720330a; }
+    label { display: block; font-weight: 650; margin: 12px 0 6px; }
+    input, select { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #c8d0dc; border-radius: 8px; font: inherit; background: white; }
+    button { border: 0; border-radius: 8px; padding: 11px 14px; font: inherit; font-weight: 650; cursor: pointer; margin: 10px 8px 0 0; background: #175cd3; color: white; }
+    button.secondary { background: #344054; }
+    button.light { background: #e9eef8; color: #182230; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #101828; color: #e6edf7; padding: 14px; border-radius: 10px; min-height: 48px; }
+    .status { padding: 10px 12px; border-radius: 8px; background: #eef4ff; color: #1849a9; }
+    .warning { background: #fffaeb; color: #93370d; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+    code { background: #eef0f5; padding: 2px 5px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Test OAuth2 + échange de code</h1>
+  <p class="muted">Petite page JavaScript pour tester le flux Google / Keycloak de ton backend Spring Boot.</p>
+
+  <section class="card">
+    <h2>Configuration</h2>
+    <label for="backend">URL du backend</label>
+    <input id="backend" value="https://localhost:8443" placeholder="https://localhost:8443">
+
+    <div class="row">
+      <div>
+        <label for="googlePath">Endpoint de démarrage Google</label>
+        <input id="googlePath" value="/auth/google">
+      </div>
+      <div>
+        <label for="keycloakPath">Endpoint de démarrage Keycloak</label>
+        <input id="keycloakPath" value="/auth/keycloak">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="clientApp">clientApp Keycloak</label>
+        <input id="clientApp" value="app-a">
+      </div>
+      <div>
+        <label for="exchangePath">Endpoint d’échange du code</label>
+        <input id="exchangePath" value="/auth/exchange">
+      </div>
+    </div>
+    <label for="exchangeMethod">Méthode HTTP de l’échange</label>
+    <select id="exchangeMethod">
+      <option value="POST">POST avec JSON {"code":"..."}</option>
+      <option value="GET">GET avec ?code=...</option>
+    </select>
+
+    <p class="muted">URI de retour utilisée : <code id="redirectUri"></code></p>
+    <div class="status warning">L’URI de retour doit être autorisée par ton <code>RedirectUriValidator</code>. Adapte les chemins ci-dessus à tes endpoints réels.</div>
+  </section>
+
+  <section class="card">
+    <h2>1. Démarrer l’authentification</h2>
+    <button id="googleBtn">Se connecter avec Google</button>
+    <button id="keycloakBtn" class="secondary">Se connecter avec Keycloak</button>
+  </section>
+
+  <section class="card">
+    <h2>2. Code reçu</h2>
+    <p id="codeStatus" class="muted">Aucun code reçu dans l’URL.</p>
+    <label for="code">Code d’autorisation</label>
+    <input id="code" placeholder="Le code sera rempli automatiquement après le login">
+    <button id="exchangeBtn">Échanger le code contre les tokens</button>
+    <button id="clearBtn" class="light">Effacer</button>
+  </section>
+
+  <section class="card">
+    <h2>Résultat de l’échange</h2>
+    <pre id="result">En attente…</pre>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const currentRedirectUri = window.location.origin + window.location.pathname;
+  $("redirectUri").textContent = currentRedirectUri;
+
+  function backendBase() {
+    return $("backend").value.trim().replace(/\/+$/, "");
+  }
+
+  function show(value) {
+    $("result").textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  }
+
+  function startLogin(path, provider) {
+    const backend = backendBase();
+    if (!backend) {
+      show("Renseigne l’URL du backend.");
+      return;
+    }
+    const url = new URL(path, backend);
+    url.searchParams.set("redirectUri", currentRedirectUri);
+    if (provider === "keycloak") {
+      url.searchParams.set("clientApp", $("clientApp").value.trim());
+    }
+    window.location.assign(url.toString());
+  }
+
+  async function exchangeCode() {
+    const code = $("code").value.trim();
+    if (!code) {
+      show("Aucun code fourni. Lance d’abord le login, ou colle un code dans le champ.");
+      return;
+    }
+
+    const backend = backendBase();
+    const method = $("exchangeMethod").value;
+    const url = new URL($("exchangePath").value.trim(), backend);
+
+    const options = {
+      method,
+      credentials: "include",
+      headers: { "Accept": "application/json" }
+    };
+
+    if (method === "GET") {
+      url.searchParams.set("code", code);
+    } else {
+      options.headers["Content-Type"] = "application/json";
+      options.body = JSON.stringify({ code });
+    }
+
+    $("exchangeBtn").disabled = true;
+    show("Échange en cours…");
+    try {
+      const response = await fetch(url.toString(), options);
+      const contentType = response.headers.get("content-type") || "";
+      const body = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+
+      show({
+        httpStatus: response.status,
+        ok: response.ok,
+        response: body
+      });
+    } catch (error) {
+      show({
+        error: String(error),
+        hint: "Vérifie que le backend tourne, que le chemin d’échange est correct et que CORS autorise http://localhost:4200."
+      });
+    } finally {
+      $("exchangeBtn").disabled = false;
+    }
+  }
+
+  $("googleBtn").addEventListener("click", () => startLogin($("googlePath").value.trim(), "google"));
+  $("keycloakBtn").addEventListener("click", () => startLogin($("keycloakPath").value.trim(), "keycloak"));
+  $("exchangeBtn").addEventListener("click", exchangeCode);
+  $("clearBtn").addEventListener("click", () => {
+    $("code").value = "";
+    $("codeStatus").textContent = "Aucun code reçu dans l’URL.";
+    show("En attente…");
+  });
+
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("code");
+  const oauthError = params.get("error");
+  if (code) {
+    $("code").value = code;
+    $("codeStatus").textContent = "Code reçu depuis l’URL. Prêt pour l’échange.";
+    // Retire le code de la barre d’adresse après l’avoir lu.
+    window.history.replaceState({}, document.title, currentRedirectUri);
+    // N’effectue pas l’échange automatiquement : l’utilisateur peut vérifier le code d’abord.
+  } else if (oauthError) {
+    $("codeStatus").textContent = "Erreur OAuth reçue : " + oauthError;
+    show({
+      error: oauthError,
+      description: params.get("error_description") || ""
+    });
+    window.history.replaceState({}, document.title, currentRedirectUri);
+  }
+})();
+</script>
+</body>
+</html>

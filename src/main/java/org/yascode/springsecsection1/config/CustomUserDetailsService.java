@@ -6,6 +6,7 @@ import org.springframework.security.provisioning.UserDetailsManager;
 public interface CustomUserDetailsService extends UserDetailsManager {
 
     UserDetails findOrCreate(
+            String registrationId,
             String subject,
             String email
     );

@@ -1,11 +1,14 @@
 package org.yascode.springsecsection1.config;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.security.autoconfigure.web.servlet.PathRequest;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.authentication.ott.OneTimeTokenAuthenticationProvider;
 import org.springframework.security.authentication.ott.OneTimeTokenService;
@@ -17,13 +20,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
-import org.springframework.security.config.annotation.web.configurers.SessionManagementConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.session.SessionRegistry;
-import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.password.HaveIBeenPwnedRestApiPasswordChecker;
@@ -34,7 +34,6 @@ import org.yascode.springsecsection1.config.security.web.access.CustomAuthorizat
 import org.yascode.springsecsection1.config.security.web.access.CustomBasicAccessDeniedHandler;
 import org.yascode.springsecsection1.config.security.web.authentication.CustomBasicAuthenticationEntryPoint;
 import org.yascode.springsecsection1.config.security.web.authentication.GlobalAuthenticationEntryPoint;
-import org.yascode.springsecsection1.config.security.web.authentication.OAuth2AuthenticationSuccessHandler;
 import org.yascode.springsecsection1.config.security.web.cors.CustomCorsConfigurationSource;
 
 @Configuration
@@ -47,12 +46,12 @@ public class SecurityFilterChainConfiguration {
             HttpSecurity http,
             OneTimeTokenHeaderFilter oneTimeTokenHeaderFilter,
             DaoAuthenticationProvider daoAuthenticationProvider,
-//            SessionRegistry sessionRegistry,
             CustomBasicAuthenticationEntryPoint customBasicAuthenticationEntryPoint,
             GlobalAuthenticationEntryPoint globalAuthenticationEntryPoint,
             @Qualifier("OAuth2AuthenticationSuccessHandler") AuthenticationSuccessHandler authenticationSuccessHandler,
             CustomBasicAccessDeniedHandler customBasicAccessDeniedHandler,
-            CustomCorsConfigurationSource customCorsConfigurationSource
+            CustomCorsConfigurationSource customCorsConfigurationSource,
+            @Qualifier("jwtAuthConverter") JwtAuthenticationConverter jwtAuthConverter
     ) {
 
         http.redirectToHttps(Customizer.withDefaults());
@@ -61,21 +60,20 @@ public class SecurityFilterChainConfiguration {
                 .requestMatchers(PathRequest.toH2Console()).permitAll()
                 .requestMatchers("/auth/**","/oauth2/**", "/login/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/ott/generate", "/login/ott").permitAll()
+                .requestMatchers("/error", "/error/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/welcome").hasAuthority("UPDATE")
                 .anyRequest().authenticated());
         http.authenticationProvider(daoAuthenticationProvider);
 
+        http.oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                        .jwtAuthenticationConverter(jwtAuthConverter)
+                )
+        );
+
         http.oauth2Login(oauth -> oauth
                 .successHandler(authenticationSuccessHandler)
         );
-
-//        http.sessionManagement(sessionManagement ->
-//                sessionManagement.sessionCreationPolicy(SessionCreationPolicy.ALWAYS).
-//                maximumSessions(1).
-//                maxSessionsPreventsLogin(true).
-//                sessionRegistry(sessionRegistry)
-//                sessionFixation(SessionManagementConfigurer.SessionFixationConfigurer::newSession)
-//        );
 
         http.addFilterBefore(
                 oneTimeTokenHeaderFilter,
@@ -102,6 +100,11 @@ public class SecurityFilterChainConfiguration {
 
         http.headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin));
         return http.build();
+    }
+
+    @Bean
+    public AuthenticationManager authManager(DaoAuthenticationProvider daoAuthenticationProvider) {
+        return new ProviderManager(daoAuthenticationProvider);
     }
 
     @Bean
@@ -148,9 +151,4 @@ public class SecurityFilterChainConfiguration {
         });
         return authorizationEventPublisher;
     }
-
-//    @Bean
-//    public SessionRegistry sessionRegistry() {
-//        return new SessionRegistryImpl();
-//    }
 }

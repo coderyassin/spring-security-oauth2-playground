@@ -16,13 +16,16 @@ import java.util.List;
 @Component
 public final class JwtHelper {
 
+    private final String issuer;
     private final SecretKey secretKey;
     private final long accessTokenExpirationMs;
 
     public JwtHelper(
+            @Value("${spring.application.name}") String issuer,
             @Value("${app.jwt.secret}") String secret,
             @Value("${app.jwt.access-token-expiration-ms}") long accessTokenExpirationMs
     ) {
+        this.issuer = issuer;
         this.secretKey = Keys.hmacShaKeyFor(
                 secret.getBytes(StandardCharsets.UTF_8)
         );
@@ -39,7 +42,7 @@ public final class JwtHelper {
 
         return Jwts.builder()
                 .subject(userDetails.getUsername())
-                .issuer("yascode")
+                .issuer(issuer)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(accessTokenExpirationMs)))
                 .claim("type", "access")

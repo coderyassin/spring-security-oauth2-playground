@@ -4,6 +4,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -14,14 +15,17 @@ import org.springframework.security.provisioning.GroupManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.yascode.springsecsection1.factory.UserFactory;
 import org.yascode.springsecsection1.model.Group;
 import org.yascode.springsecsection1.model.User;
 import org.yascode.springsecsection1.repository.GroupRepository;
 import org.yascode.springsecsection1.repository.UserRepository;
 import org.yascode.springsecsection1.repository.projection.GroupNameView;
+import org.yascode.springsecsection1.service.KeycloakUserService;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 
 @NullMarked
 @Service
@@ -29,12 +33,23 @@ public class JdbcUserDetailsManager implements CustomUserDetailsService, GroupMa
 
     protected final Log logger = LogFactory.getLog(getClass());
 
+    private final KeycloakUserService keycloakUserService;
+
     private final UserRepository userRepository;
     private final GroupRepository groupRepository;
 
-    public JdbcUserDetailsManager(UserRepository userRepository, GroupRepository groupRepository) {
+    private final UserFactory userFactory;
+
+    public JdbcUserDetailsManager(
+            KeycloakUserService keycloakUserService,
+            UserRepository userRepository,
+            GroupRepository groupRepository,
+            UserFactory userFactory
+    ) {
+        this.keycloakUserService = keycloakUserService;
         this.userRepository = userRepository;
         this.groupRepository = groupRepository;
+        this.userFactory = userFactory;
     }
 
     @Override
@@ -204,19 +219,17 @@ public class JdbcUserDetailsManager implements CustomUserDetailsService, GroupMa
     }
 
     @Override
-    public UserDetails findOrCreate(String subject, String email) {
+    public UserDetails findOrCreate(String userId, String subject, String email) {
         return userRepository.findBySubjectOrEmail(subject, email)
                 .orElseGet(() -> {
-                    User newUser = User.builder()
-                            .username(subject)
-                            .subject(subject)
-                            .email(email)
-                            .accountNonExpired(true)
-                            .accountNonLocked(true)
-                            .credentialsNonExpired(true)
-                            .enabled(true)
-                            .build();
+                    UserRepresentation keycloakUser = keycloakUserService.findExistingUser(email);
+
+                    User newUser = Objects.nonNull(keycloakUser) ?
+                            userFactory.create(userId, keycloakUser.getUsername(), subject, keycloakUser.getEmail(), keycloakUser.isEnabled()) :
+                            userFactory.createDisabled(userId, subject, email);
+
                     userRepository.save(newUser);
+
                     return newUser;
                 });
     }

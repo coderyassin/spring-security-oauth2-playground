@@ -1,6 +1,7 @@
 package org.yascode.springsecsection1.config.exception;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,5 +19,19 @@ public class GlobalExceptionHandler {
                         "INVALID_AUTHORIZATION_CODE",
                         exception.getMessage()
                 ));
+    }
+
+    @ExceptionHandler(UnknownClientApplicationException.class)
+    public ProblemDetail handleUnknownClientApplication(
+            UnknownClientApplicationException ex
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                ex.getMessage()
+        );
+
+        problem.setTitle("Unknown client application");
+
+        return problem;
     }
 }
